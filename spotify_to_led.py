@@ -29,20 +29,17 @@ def get_spotify_title():
 
     WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.wintypes.BOOL, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
 
+    # 1단계: Spotify 창 핸들을 먼저 찾기 (재생 중지 시에도 "Spotify" 또는 "Spotify Premium")
+    spotify_hwnd = [None]
     spotify_title = [None]
+
+    # 알려진 제외 패턴 (Chrome 브라우저 등)
+    EXCLUDE_SUFFIXES = (" - Chrome", " - Edge", " - Firefox", " - Opera", " - Brave")
 
     def enum_callback(hwnd, lparam):
         if not IsWindowVisible(hwnd):
             return True
 
-        # 클래스 이름 확인
-        class_name = ctypes.create_unicode_buffer(256)
-        GetClassNameW(hwnd, class_name, 256)
-
-        if class_name.value != "Chrome_WidgetWin_0":
-            return True
-
-        # 창 제목 확인
         length = GetWindowTextLengthW(hwnd)
         if length == 0:
             return True
@@ -51,12 +48,22 @@ def get_spotify_title():
         GetWindowTextW(hwnd, title, length + 1)
         title_str = title.value
 
-        # Spotify 창: 재생 중이면 "Artist - Song", 아니면 "Spotify" 또는 "Spotify Premium"
-        if " - " in title_str and title_str not in ("Spotify", "Spotify Premium"):
-            # 다른 Chrome 앱과 구별하기 위해 추가 확인
-            # Spotify 창은 보통 "Artist - Song" 형태
+        # Spotify 앱 찾기: 미재생 시 "Spotify" 또는 "Spotify Premium"
+        if title_str in ("Spotify", "Spotify Premium", "Spotify Free"):
+            spotify_hwnd[0] = hwnd
+            return True  # 미재생 상태
+
+        # 재생 중이면 "Artist - Song" 형태
+        # 브라우저 제목 제외
+        if any(title_str.endswith(s) for s in EXCLUDE_SUFFIXES):
+            return True
+
+        # Chrome_WidgetWin 클래스 + "Artist - Song" 패턴
+        class_name = ctypes.create_unicode_buffer(256)
+        GetClassNameW(hwnd, class_name, 256)
+        if class_name.value.startswith("Chrome_WidgetWin") and " - " in title_str:
             spotify_title[0] = title_str
-            return False  # 찾았으면 중단
+            return False  # 찾음
 
         return True
 
