@@ -56,7 +56,7 @@ def render_text_to_png(text, width=SCREEN_WIDTH, height=SCREEN_HEIGHT, font_size
     x = max(0, (width - text_w) // 2) - bbox[0]
     y = max(0, (height - text_h) // 2) - bbox[1]
 
-    draw.text((x, y), text, fill=(255, 0, 128, 255), font=font)
+    draw.text((x, y), text, fill=(229, 147, 161, 255), font=font)
 
     # PNG 바이트로 변환
     buf = io.BytesIO()
