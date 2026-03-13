@@ -71,8 +71,20 @@ pcap에서 추출한 원본 HDPlayer 설정:
   - `make_packet()`: 프로토콜 패킷 생성
   - `recv_packet()`: 응답 수신
   - `send_text_to_led()`: 전체 전송 플로우
+- `spotify_to_led.py` — Spotify → LED 자동 전송 (메인 실행 스크립트)
+  - `get_spotify_title()`: Windows API로 Spotify 창 제목 읽기
+  - 5초 간격으로 곡 변경 감지 → 자동 전송
+- `test_spotify.py` — Spotify 창 제목 읽기 테스트 (전광판 연결 불필요)
+- `debug_windows.py` — 열린 창 목록 출력 (디버그용)
 - `analyze_pcap.py` — pcap 분석 도구 (개발용)
 - `ok.pcapng` — 원본 캡처 파일 (참고용)
+
+### Spotify 창 감지 방식
+- Windows API `EnumWindows`로 창 목록 순회
+- 클래스명 `Chrome_WidgetWin_1` (Electron 앱)
+- 재생 중: 창 제목이 `아티스트 - 곡명` 형태
+- 미재생: 창 제목이 `Spotify` 또는 `Spotify Premium`
+- 브라우저 창 제외: `- Chrome`, `- Edge` 등 suffix 필터링
 
 ## 개발 시 주의사항
 - 전광판 테스트는 전광판 WiFi에 연결된 상태에서만 가능
@@ -80,14 +92,19 @@ pcap에서 추출한 원본 HDPlayer 설정:
 - 패킷 비교 디버깅 시 Wireshark 사용
 - Windows 환경 (가게 노트북) 기준으로 폰트 경로 설정됨
 
-## 테스트 결과
-- 전송 성공 확인 (2026-03-13)
+## 테스트 결과 (2026-03-13)
+- 전송 성공 확인
 - 글씨 색상: 핑크색(229,147,161)으로 수정 완료
 - 세로 정렬: bbox 오프셋 보정으로 수정 완료
 - 효과 설정: DispEffect=30 (스크롤), ClearEffect=0 (사라짐 없음)
+- Spotify 창 제목 읽기 성공 (BABYMONSTER - SHEESH 확인)
 
-## 다음 할 일
-1. ~~가게에서 send_to_led.py 실제 테스트~~ ✅ 완료
-2. 동작 확인 후 Spotify 창 제목 읽기 기능 추가
-3. 자동 전송 루프 구현
-4. 네트워크 이중 연결 구성
+## 진행 상태
+1. ~~전광판 프로토콜 역분석~~ ✅
+2. ~~send_to_led.py 전송 테스트~~ ✅
+3. ~~Spotify 창 제목 읽기~~ ✅
+4. ~~spotify_to_led.py 자동 전송 스크립트~~ ✅
+5. USB WiFi 어댑터로 네트워크 이중 연결 ← 다음 단계
+   - ipTIME A3000mini 구매 예정
+   - 내장 WiFi → 전광판, USB WiFi → 가게 공유기(인터넷)
+6. 최종 통합 테스트 (Spotify 재생 → 전광판 자동 표시)
