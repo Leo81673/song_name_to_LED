@@ -49,14 +49,14 @@ def render_text_to_png(text, width=SCREEN_WIDTH, height=SCREEN_HEIGHT, font_size
     if font is None:
         font = ImageFont.load_default()
 
-    # 텍스트 중앙 정렬
+    # 텍스트 중앙 정렬 (bbox 오프셋 보정)
     bbox = draw.textbbox((0, 0), text, font=font)
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
-    x = max(0, (width - text_w) // 2)
-    y = max(0, (height - text_h) // 2)
+    x = max(0, (width - text_w) // 2) - bbox[0]
+    y = max(0, (height - text_h) // 2) - bbox[1]
 
-    draw.text((x, y), text, fill=(255, 255, 255, 255), font=font)
+    draw.text((x, y), text, fill=(229, 147, 161, 255), font=font)
 
     # PNG 바이트로 변환
     buf = io.BytesIO()
