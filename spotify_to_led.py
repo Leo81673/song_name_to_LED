@@ -15,7 +15,8 @@ import sys
 from send_to_led import send_text_to_led
 
 # === 설정 ===
-CHECK_INTERVAL = 5  # 초마다 Spotify 확인
+CHECK_INTERVAL = 3   # 초마다 Spotify 확인
+RESEND_INTERVAL = 10  # 같은 곡이어도 N초마다 재전송
 
 
 def get_spotify_title():
@@ -84,30 +85,45 @@ def get_spotify_title():
 
 def main():
     print("=== Spotify → LED 전광판 자동 전송 ===")
-    print(f"확인 간격: {CHECK_INTERVAL}초")
+    print(f"확인 간격: {CHECK_INTERVAL}초, 재전송 간격: {RESEND_INTERVAL}초")
     print("종료: Ctrl+C")
     print()
 
     last_title = None
+    last_send_time = 0
 
     try:
         while True:
             title = get_spotify_title()
+            now = time.time()
 
             if title is None:
                 if last_title is not None:
                     print("[*] Spotify 재생 중지 또는 앱 미실행")
                     last_title = None
             elif title != last_title:
+                # 새 곡 → 즉시 전송
                 print(f"[♪] 새 곡 감지: {title}")
                 try:
                     success = send_text_to_led(title)
                     if success:
                         last_title = title
+                        last_send_time = now
                     else:
                         print("[!] 전송 실패 — 다음 주기에 재시도합니다")
                 except Exception as e:
                     print(f"[!] 전송 오류: {e} — 다음 주기에 재시도합니다")
+            elif now - last_send_time >= RESEND_INTERVAL:
+                # 같은 곡이어도 10초마다 재전송
+                print(f"[↻] 재전송: {title}")
+                try:
+                    success = send_text_to_led(title)
+                    if success:
+                        last_send_time = now
+                    else:
+                        print("[!] 재전송 실패")
+                except Exception as e:
+                    print(f"[!] 재전송 오류: {e}")
 
             time.sleep(CHECK_INTERVAL)
 
