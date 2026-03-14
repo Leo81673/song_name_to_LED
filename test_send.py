@@ -235,7 +235,7 @@ def main():
         ok = ok and step("7a. 파일 목록", sock, 0x0011, expect=0x0012)
         ok = ok and step("7b. 파일 목록(끝)", sock, 0x0011, expect=0x0012)
         ok = ok and step("8a. 전송 준비", sock, 0x0013, expect=0x0014)
-        ok = ok and step("8b. 전송 확인", sock, 0x0015, b"\x00\x00\x00\x00", expect=0x0016)
+        ok = ok and step("8b. 전송 확인", sock, 0x0015, b"\x00\x00\x00\x00\x01\x00\x00\x00", expect=0x0016)
 
         # PNG 전송
         ok = ok and step("9a. PNG 파일명", sock, 0x0017, png_filename.encode("ascii") + b"\x00", expect=0x0018)
@@ -249,7 +249,8 @@ def main():
 
         # 완료
         ok = ok and step("11a. 전송 완료", sock, 0x001D, expect=0x001E)
-        ok = ok and step("11b. 최종 확인", sock, 0x001F, expect=0x0020)
+        ok = ok and step("11b. 최종 확인(1)", sock, 0x001F, expect=0x0020)
+        step("11c. 최종 확인(2)", sock, 0x001F)  # HDPlayer는 2번 보냄
 
         print(f"\n{'='*40}")
         if ok:

@@ -378,7 +378,8 @@ def send_text_to_led(text):
         sock.sendall(make_packet(0x0013))
         recv_packet(sock)
 
-        sock.sendall(make_packet(0x0015, b"\x00\x00\x00\x00"))
+        # 0x0015: 전송 확인 — 01000000 플래그로 기존 콘텐츠 교체
+        sock.sendall(make_packet(0x0015, b"\x00\x00\x00\x00\x01\x00\x00\x00"))
         recv_packet(sock)
 
         # Step 9: PNG 파일 전송
@@ -430,11 +431,15 @@ def send_text_to_led(text):
             print("[!] 전송 완료 확인 실패 (0x001E 응답 없음)")
             return False
 
+        # 최종 확인 — HDPlayer는 0x001F를 2번 보냄
         sock.sendall(make_packet(0x001F))
         length, cmd, data = recv_expected(sock, 0x0020)
         if cmd is None:
             print("[!] 최종 확인 실패 (0x0020 응답 없음)")
             return False
+
+        sock.sendall(make_packet(0x001F))
+        recv_packet(sock, timeout=2)  # 두 번째는 응답 없을 수 있음
 
         print("[+] 전광판 업데이트 완료!")
         return True
