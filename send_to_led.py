@@ -42,6 +42,47 @@ def _load_font(font_size=14):
     return ImageFont.load_default()
 
 
+def _is_emoji(ch):
+    """이모지 문자인지 판별합니다."""
+    cp = ord(ch)
+    return (
+        0x1F600 <= cp <= 0x1F64F or   # 이모티콘
+        0x1F300 <= cp <= 0x1F5FF or   # 기호 및 픽토그램
+        0x1F680 <= cp <= 0x1F6FF or   # 교통 및 지도
+        0x1F900 <= cp <= 0x1F9FF or   # 보충 이모지
+        0x1FA00 <= cp <= 0x1FA6F or   # 체스 기호
+        0x1FA70 <= cp <= 0x1FAFF or   # 기호 확장
+        0x2600 <= cp <= 0x26FF or     # 기타 기호
+        0x2700 <= cp <= 0x27BF or     # 딩뱃
+        0xFE00 <= cp <= 0xFE0F or     # 변형 선택자
+        0x200D == cp                   # ZWJ
+    )
+
+
+def _is_korean(ch):
+    """한글 문자인지 판별합니다."""
+    cp = ord(ch)
+    return (
+        0xAC00 <= cp <= 0xD7AF or   # 한글 음절
+        0x3130 <= cp <= 0x318F or   # 한글 호환 자모
+        0x1100 <= cp <= 0x11FF      # 한글 자모
+    )
+
+
+def calc_text_display_width(text):
+    """텍스트의 표시 너비를 고정 글자 크기로 계산합니다.
+    한글=7px, 영문=7px, 이모지=9px."""
+    width = 0
+    for ch in text:
+        if _is_emoji(ch):
+            width += 9
+        elif _is_korean(ch):
+            width += 7
+        else:
+            width += 7
+    return width
+
+
 def measure_text_width(text, font_size=14):
     """텍스트의 렌더링 너비(픽셀)를 측정합니다."""
     font = _load_font(font_size)
@@ -118,21 +159,21 @@ def send_text_to_led(text):
     """텍스트를 LED 전광판에 전송합니다."""
     print(f"[*] 텍스트: '{text}'")
 
-    # 텍스트 바이트 길이에 따라 효과 결정
-    text_bytes = len(text.encode("utf-8"))
-    use_scroll = text_bytes > 22
+    # 텍스트 표시 너비 계산 (한글=7, 영문=7, 이모지=9)
+    text_width = calc_text_display_width(text)
+    use_scroll = text_width > SCREEN_WIDTH
     if use_scroll:
         disp_effect = 26   # 연속 스크롤 (우→좌)
         clear_effect = 25
         # 스크롤: 텍스트 전체 너비로 렌더링
         png_data = render_text_to_png(text, width=None)
-        print(f"[*] 스크롤 모드 (텍스트 {text_bytes}B > 22B, DispEffect=26)")
+        print(f"[*] 스크롤 모드 (표시너비 {text_width}px > {SCREEN_WIDTH}px, DispEffect=26)")
     else:
         disp_effect = 30   # 왼쪽에서 등장
         clear_effect = 0
         # 정적: 화면 너비에 맞춰 렌더링
         png_data = render_text_to_png(text)
-        print(f"[*] 정적 모드 (텍스트 {text_bytes}B <= 22B, DispEffect=30)")
+        print(f"[*] 정적 모드 (표시너비 {text_width}px <= {SCREEN_WIDTH}px, DispEffect=30)")
 
     # 1. PNG 렌더링
     png_md5 = hashlib.md5(png_data).hexdigest()
