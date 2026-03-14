@@ -15,7 +15,9 @@ import sys
 from send_to_led import send_text_to_led
 
 # === 설정 ===
-CHECK_INTERVAL = 5  # 초마다 Spotify 확인
+CHECK_INTERVAL = 3   # 초마다 Spotify 확인
+MIN_SEND_GAP = 10    # 전송 간 최소 간격 (초) — 이보다 빠르면 지연 전송
+RESEND_INTERVAL = 30  # 같은 곡이어도 N초마다 재전송 (전광판 부하 방지)
 
 
 def get_spotify_title():
@@ -61,38 +63,90 @@ def get_spotify_title():
         # Chrome_WidgetWin 클래스 + "Artist - Song" 패턴
         class_name = ctypes.create_unicode_buffer(256)
         GetClassNameW(hwnd, class_name, 256)
-        if class_name.value.startswith("Chrome_WidgetWin") and " - " in title_str:
-            spotify_title[0] = title_str
-            return False  # 찾음
+        if class_name.value.startswith("Chrome_WidgetWin"):
+            if " - " in title_str:
+                spotify_title[0] = title_str
+                return False  # 찾음
+            # 디버그: Chrome_WidgetWin인데 " - "가 없는 경우
+            if title_str not in ("Spotify", "Spotify Premium", "Spotify Free"):
+                print(f"[DEBUG] Chrome_WidgetWin 창 발견 (매칭 안됨): '{title_str}'")
 
         return True
 
     EnumWindows(WNDENUMPROC(enum_callback), 0)
+
+    # 디버그: Spotify 창 상태 출력
+    if spotify_title[0] is None and spotify_hwnd[0] is not None:
+        print("[DEBUG] Spotify 앱 감지됨 (미재생 상태)")
+    elif spotify_title[0] is None and spotify_hwnd[0] is None:
+        print("[DEBUG] Spotify 창을 찾을 수 없음")
+
     return spotify_title[0]
 
 
 def main():
     print("=== Spotify → LED 전광판 자동 전송 ===")
-    print(f"확인 간격: {CHECK_INTERVAL}초")
+    print(f"확인 간격: {CHECK_INTERVAL}초, 최소 전송 간격: {MIN_SEND_GAP}초, 재전송 간격: {RESEND_INTERVAL}초")
     print("종료: Ctrl+C")
     print()
 
     last_title = None
+    last_send_time = 0
+    pending_title = None  # 쿨다운 중 대기하는 곡
 
     try:
         while True:
             title = get_spotify_title()
+            now = time.time()
+            elapsed = now - last_send_time
 
             if title is None:
                 if last_title is not None:
                     print("[*] Spotify 재생 중지 또는 앱 미실행")
                     last_title = None
+                    pending_title = None
             elif title != last_title:
-                print(f"[♪] 새 곡 감지: {title}")
+                # 새 곡 감지
+                if elapsed >= MIN_SEND_GAP:
+                    # 쿨다운 지남 → 즉시 전송
+                    print(f"[♪] 새 곡 감지: {title}")
+                    try:
+                        success = send_text_to_led(title)
+                        if success:
+                            last_title = title
+                            last_send_time = now
+                            pending_title = None
+                        else:
+                            print("[!] 전송 실패 — 다음 주기에 재시도합니다")
+                    except Exception as e:
+                        print(f"[!] 전송 오류: {e} — 다음 주기에 재시도합니다")
+                else:
+                    # 쿨다운 중 → 대기열에 넣기
+                    remaining = MIN_SEND_GAP - elapsed
+                    if pending_title != title:
+                        print(f"[♪] 새 곡 감지: {title} (쿨다운 {remaining:.0f}초 후 전송)")
+                        pending_title = title
+            elif pending_title is None and elapsed >= RESEND_INTERVAL:
+                # 같은 곡 재전송
+                print(f"[↻] 재전송: {title}")
                 try:
                     success = send_text_to_led(title)
                     if success:
-                        last_title = title
+                        last_send_time = now
+                    else:
+                        print("[!] 재전송 실패")
+                except Exception as e:
+                    print(f"[!] 재전송 오류: {e}")
+
+            # 쿨다운 끝났고 대기 곡이 있으면 전송
+            if pending_title and now - last_send_time >= MIN_SEND_GAP:
+                print(f"[▶] 지연 전송: {pending_title}")
+                try:
+                    success = send_text_to_led(pending_title)
+                    if success:
+                        last_title = pending_title
+                        last_send_time = now
+                        pending_title = None
                     else:
                         print("[!] 전송 실패 — 다음 주기에 재시도합니다")
                 except Exception as e:

@@ -44,9 +44,12 @@ pcap에서 추출한 원본 HDPlayer 설정:
 | 설정 | 값 | 의미 |
 |------|-----|------|
 | DispEffect | 30 | 등장 애니메이션 (왼쪽 스크롤) |
-| DispEffect | 14 | 등장 애니메이션 (다른 효과, quality 씬에서 사용) |
+| DispEffect | 26 | 연속 스크롤 (우→좌, 화면보다 넓은 이미지용) |
+| DispEffect | 17 | 등장 효과 (gay all night 씬에서 사용) |
+| DispEffect | 14 | 등장 효과 (quality 씬에서 사용) |
+| DispEffect | 1 | 즉시 표시 (practice 씬에서 사용) |
 | ClearEffect | 0 | 사라짐 애니메이션 없음 |
-| ClearEffect | 25 | 사라짐 애니메이션 있음 (quality 씬에서 사용) |
+| ClearEffect | 25 | 사라짐 애니메이션 있음 |
 | Speed | 4 | 스크롤/애니메이션 속도 |
 | HoldTime | 50 | 텍스트 정지 유지 시간 |
 | PlayeTime | 30 | 씬당 재생 시간 (초) |
@@ -55,10 +58,17 @@ pcap에서 추출한 원본 HDPlayer 설정:
 | ColorfulTextEnable | 0 | 반짝이 효과 꺼짐 |
 | SingleMode | 1 | 단일 라인 모드 |
 
-캡처에 포함된 씬 7개: PARTY, FEEL FREE, PARTY, TAPE VIBE, less thinking, smile, quality
-- 각 씬 30초 재생 후 다음 씬으로 전환
+### 스크롤 효과 (DispEffect=26)
+- 화면(160px)보다 넓은 PNG 이미지를 우→좌로 연속 스크롤
+- PNG를 텍스트 전체 너비로 렌더링 (ex: 203x16px)
+- ClearEffect=25와 함께 사용
+- Frame Width는 160 유지 (화면 크기)
+
+캡처에 포함된 씬 10개: PARTY, FEEL FREE, gay all night, PARTY, TAPE VIBE, less thinking, smile, practice, quality, bye
 - 대부분 DispEffect=30 (왼쪽 스크롤), ClearEffect=0 (사라짐 없음)
-- quality 씬만 DispEffect=14, ClearEffect=25 사용
+- bye 씬: DispEffect=26, ClearEffect=25, PNG 203x16px (연속 스크롤)
+- practice 씬: DispEffect=1, ClearEffect=25, PlayeTime=6
+- quality 씬: DispEffect=14, ClearEffect=25
 
 ### 네트워크 구성
 - 전광판: 자체 WiFi AP (192.168.6.x 대역)
