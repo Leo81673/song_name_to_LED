@@ -155,6 +155,21 @@ def recv_packet(sock, timeout=5):
         return None, None, b""
 
 
+def recv_expected(sock, expected_cmd, timeout=5, max_tries=10):
+    """기대하는 응답 커맨드가 올 때까지 수신합니다.
+    다른 응답(예: 밀린 0x001A)은 건너뜁니다."""
+    for i in range(max_tries):
+        length, cmd, data = recv_packet(sock, timeout)
+        if cmd is None:
+            print(f"[!] 응답 없음 (기대: 0x{expected_cmd:04X})")
+            return None, None, b""
+        if cmd == expected_cmd:
+            return length, cmd, data
+        print(f"[DEBUG] 0x{cmd:04X} 수신 (기대: 0x{expected_cmd:04X}, 건너뜀)")
+    print(f"[!] {max_tries}회 시도 후 기대 응답 0x{expected_cmd:04X} 못 받음")
+    return None, None, b""
+
+
 def send_text_to_led(text):
     """텍스트를 LED 전광판에 전송합니다."""
     print(f"[*] 텍스트: '{text}'")
@@ -370,39 +385,36 @@ def send_text_to_led(text):
         print(f"[*] PNG 전송 중: {png_filename}...")
         # 파일명 전송
         sock.sendall(make_packet(0x0017, png_filename.encode("ascii") + b"\x00"))
-        recv_packet(sock)
+        recv_expected(sock, 0x0018)
 
         # 파일 데이터 전송
         sock.sendall(make_packet(0x0019, png_data))
-        recv_packet(sock)
+        recv_expected(sock, 0x001A)
 
         # 파일 완료
         sock.sendall(make_packet(0x001B))
-        recv_packet(sock)
+        recv_expected(sock, 0x001C)
         print("[+] PNG 전송 완료")
 
         # Step 10: XML(.boo) 파일 전송
         print(f"[*] XML 설정 전송 중: {xml_filename}...")
         sock.sendall(make_packet(0x0017, xml_filename.encode("ascii") + b"\x00"))
-        recv_packet(sock)
+        recv_expected(sock, 0x0018)
 
-        # XML 데이터는 청크로 나눠서 전송 (최대 ~9000B)
-        chunk_size = 9000
-        for offset in range(0, len(xml_config), chunk_size):
-            chunk = xml_config[offset:offset + chunk_size]
-            sock.sendall(make_packet(0x0019, chunk))
-            recv_packet(sock)
+        # XML 데이터 전송
+        sock.sendall(make_packet(0x0019, xml_config))
+        recv_expected(sock, 0x001A)
 
         sock.sendall(make_packet(0x001B))
-        recv_packet(sock)
+        recv_expected(sock, 0x001C)
         print("[+] XML 설정 전송 완료")
 
         # Step 11: 전송 완료
         sock.sendall(make_packet(0x001D))
-        recv_packet(sock)
+        recv_expected(sock, 0x001E)
 
         sock.sendall(make_packet(0x001F))
-        recv_packet(sock)
+        recv_expected(sock, 0x0020)
 
         print("[+] 전광판 업데이트 완료!")
         return True
