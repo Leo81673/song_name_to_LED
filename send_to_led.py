@@ -121,15 +121,13 @@ def send_text_to_led(text):
     # 텍스트 바이트 길이에 따라 효과 결정
     text_bytes = len(text.encode("utf-8"))
     use_scroll = text_bytes > 22
+    disp_effect = 30   # 왼쪽 스크롤 (우→좌)
+    clear_effect = 0
     if use_scroll:
-        disp_effect = 30   # 왼쪽 스크롤 (우→좌)
-        clear_effect = 0
         # 스크롤: 텍스트 전체 너비로 렌더링
         png_data = render_text_to_png(text, width=None)
         print(f"[*] 스크롤 모드 (텍스트 {text_bytes}B > 22B)")
     else:
-        disp_effect = 14    # 정적 표시
-        clear_effect = 0
         # 정적: 화면 너비에 맞춰 렌더링
         png_data = render_text_to_png(text)
         print(f"[*] 정적 모드 (텍스트 {text_bytes}B <= 22B)")
