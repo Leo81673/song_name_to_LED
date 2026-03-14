@@ -16,7 +16,7 @@ from send_to_led import send_text_to_led
 
 # === 설정 ===
 CHECK_INTERVAL = 3   # 초마다 Spotify 확인
-RESEND_INTERVAL = 10  # 같은 곡이어도 N초마다 재전송
+RESEND_INTERVAL = 30  # 같은 곡이어도 N초마다 재전송 (전광판 부하 방지)
 
 
 def get_spotify_title():

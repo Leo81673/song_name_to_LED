@@ -383,38 +383,58 @@ def send_text_to_led(text):
 
         # Step 9: PNG 파일 전송
         print(f"[*] PNG 전송 중: {png_filename}...")
-        # 파일명 전송
         sock.sendall(make_packet(0x0017, png_filename.encode("ascii") + b"\x00"))
-        recv_expected(sock, 0x0018)
+        _, cmd, _ = recv_expected(sock, 0x0018)
+        if cmd is None:
+            print("[!] PNG 파일명 응답 실패")
+            return False
 
-        # 파일 데이터 전송
         sock.sendall(make_packet(0x0019, png_data))
-        recv_expected(sock, 0x001A)
+        _, cmd, _ = recv_expected(sock, 0x001A)
+        if cmd is None:
+            print("[!] PNG 데이터 응답 실패")
+            return False
 
-        # 파일 완료
         sock.sendall(make_packet(0x001B))
-        recv_expected(sock, 0x001C)
+        _, cmd, _ = recv_expected(sock, 0x001C)
+        if cmd is None:
+            print("[!] PNG 완료 응답 실패")
+            return False
         print("[+] PNG 전송 완료")
 
         # Step 10: XML(.boo) 파일 전송
         print(f"[*] XML 설정 전송 중: {xml_filename}...")
         sock.sendall(make_packet(0x0017, xml_filename.encode("ascii") + b"\x00"))
-        recv_expected(sock, 0x0018)
+        _, cmd, _ = recv_expected(sock, 0x0018)
+        if cmd is None:
+            print("[!] XML 파일명 응답 실패")
+            return False
 
-        # XML 데이터 전송
         sock.sendall(make_packet(0x0019, xml_config))
-        recv_expected(sock, 0x001A)
+        _, cmd, _ = recv_expected(sock, 0x001A)
+        if cmd is None:
+            print("[!] XML 데이터 응답 실패")
+            return False
 
         sock.sendall(make_packet(0x001B))
-        recv_expected(sock, 0x001C)
+        _, cmd, _ = recv_expected(sock, 0x001C)
+        if cmd is None:
+            print("[!] XML 완료 응답 실패")
+            return False
         print("[+] XML 설정 전송 완료")
 
         # Step 11: 전송 완료
         sock.sendall(make_packet(0x001D))
-        recv_expected(sock, 0x001E)
+        length, cmd, data = recv_expected(sock, 0x001E)
+        if cmd is None:
+            print("[!] 전송 완료 확인 실패 (0x001E 응답 없음)")
+            return False
 
         sock.sendall(make_packet(0x001F))
-        recv_expected(sock, 0x0020)
+        length, cmd, data = recv_expected(sock, 0x0020)
+        if cmd is None:
+            print("[!] 최종 확인 실패 (0x0020 응답 없음)")
+            return False
 
         print("[+] 전광판 업데이트 완료!")
         return True
