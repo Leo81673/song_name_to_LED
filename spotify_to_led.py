@@ -61,13 +61,24 @@ def get_spotify_title():
         # Chrome_WidgetWin 클래스 + "Artist - Song" 패턴
         class_name = ctypes.create_unicode_buffer(256)
         GetClassNameW(hwnd, class_name, 256)
-        if class_name.value.startswith("Chrome_WidgetWin") and " - " in title_str:
-            spotify_title[0] = title_str
-            return False  # 찾음
+        if class_name.value.startswith("Chrome_WidgetWin"):
+            if " - " in title_str:
+                spotify_title[0] = title_str
+                return False  # 찾음
+            # 디버그: Chrome_WidgetWin인데 " - "가 없는 경우
+            if title_str not in ("Spotify", "Spotify Premium", "Spotify Free"):
+                print(f"[DEBUG] Chrome_WidgetWin 창 발견 (매칭 안됨): '{title_str}'")
 
         return True
 
     EnumWindows(WNDENUMPROC(enum_callback), 0)
+
+    # 디버그: Spotify 창 상태 출력
+    if spotify_title[0] is None and spotify_hwnd[0] is not None:
+        print("[DEBUG] Spotify 앱 감지됨 (미재생 상태)")
+    elif spotify_title[0] is None and spotify_hwnd[0] is None:
+        print("[DEBUG] Spotify 창을 찾을 수 없음")
+
     return spotify_title[0]
 
 

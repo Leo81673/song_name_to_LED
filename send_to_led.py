@@ -25,13 +25,8 @@ SCREEN_HEIGHT = 16
 DEVICE_ID = "D16-23-A454A"
 
 
-def render_text_to_png(text, width=SCREEN_WIDTH, height=SCREEN_HEIGHT, font_size=14):
-    """텍스트를 160x16 PNG 이미지로 렌더링합니다."""
-    img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
-    draw = ImageDraw.Draw(img)
-
-    # 시스템 폰트 시도
-    font = None
+def _load_font(font_size=14):
+    """시스템 폰트를 로드합니다."""
     font_paths = [
         "C:/Windows/Fonts/malgun.ttf",      # 맑은 고딕 (Windows)
         "C:/Windows/Fonts/gulim.ttc",        # 굴림
@@ -41,18 +36,41 @@ def render_text_to_png(text, width=SCREEN_WIDTH, height=SCREEN_HEIGHT, font_size
     ]
     for fp in font_paths:
         try:
-            font = ImageFont.truetype(fp, font_size)
-            break
+            return ImageFont.truetype(fp, font_size)
         except (OSError, IOError):
             continue
+    return ImageFont.load_default()
 
-    if font is None:
-        font = ImageFont.load_default()
 
-    # 텍스트 중앙 정렬 (bbox 오프셋 보정)
+def measure_text_width(text, font_size=14):
+    """텍스트의 렌더링 너비(픽셀)를 측정합니다."""
+    font = _load_font(font_size)
+    tmp = Image.new("RGBA", (1, 1))
+    draw = ImageDraw.Draw(tmp)
     bbox = draw.textbbox((0, 0), text, font=font)
+    return bbox[2] - bbox[0]
+
+
+def render_text_to_png(text, width=SCREEN_WIDTH, height=SCREEN_HEIGHT, font_size=14):
+    """텍스트를 PNG 이미지로 렌더링합니다.
+    width가 None이면 텍스트 전체 너비에 맞춰 자동 결정."""
+    font = _load_font(font_size)
+
+    # 텍스트 크기 측정
+    tmp = Image.new("RGBA", (1, 1))
+    tmp_draw = ImageDraw.Draw(tmp)
+    bbox = tmp_draw.textbbox((0, 0), text, font=font)
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
+
+    # 자동 너비: 텍스트 전체가 들어가는 크기
+    if width is None:
+        width = text_w + 4  # 약간의 여백
+
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
+    draw = ImageDraw.Draw(img)
+
+    # 텍스트 배치 (bbox 오프셋 보정)
     x = max(0, (width - text_w) // 2) - bbox[0]
     y = max(0, (height - text_h) // 2) - bbox[1]
 
@@ -100,8 +118,23 @@ def send_text_to_led(text):
     """텍스트를 LED 전광판에 전송합니다."""
     print(f"[*] 텍스트: '{text}'")
 
+    # 텍스트 바이트 길이에 따라 효과 결정
+    text_bytes = len(text.encode("utf-8"))
+    use_scroll = text_bytes > 22
+    if use_scroll:
+        disp_effect = 30   # 왼쪽 스크롤 (우→좌)
+        clear_effect = 0
+        # 스크롤: 텍스트 전체 너비로 렌더링
+        png_data = render_text_to_png(text, width=None)
+        print(f"[*] 스크롤 모드 (텍스트 {text_bytes}B > 22B)")
+    else:
+        disp_effect = 14    # 정적 표시
+        clear_effect = 0
+        # 정적: 화면 너비에 맞춰 렌더링
+        png_data = render_text_to_png(text)
+        print(f"[*] 정적 모드 (텍스트 {text_bytes}B <= 22B)")
+
     # 1. PNG 렌더링
-    png_data = render_text_to_png(text)
     png_md5 = hashlib.md5(png_data).hexdigest()
     png_filename = f"{png_md5}.png"
     print(f"[*] PNG 렌더링 완료: {len(png_data)}B, MD5: {png_md5}")
@@ -179,14 +212,14 @@ def send_text_to_led(text):
             <Node Level="4" Type="HD_SingleLineText_Plugin">
                 <Attribute Name="ByCount">1</Attribute>
                 <Attribute Name="ByTime">300</Attribute>
-                <Attribute Name="ClearEffect">0</Attribute>
+                <Attribute Name="ClearEffect">{clear_effect}</Attribute>
                 <Attribute Name="ClearTime">4</Attribute>
                 <Attribute Name="ColorfulTextEnable">0</Attribute>
                 <Attribute Name="ColorfulTextIndex">3</Attribute>
                 <Attribute Name="ColorfulTextSelect">://images/Colorful/static.png</Attribute>
                 <Attribute Name="ColorfulTextSpeed">0</Attribute>
                 <Attribute Name="ContentAlign">132</Attribute>
-                <Attribute Name="DispEffect">30</Attribute>
+                <Attribute Name="DispEffect">{disp_effect}</Attribute>
                 <Attribute Name="DispTime">4</Attribute>
                 <Attribute Name="EditBgColor">0</Attribute>
                 <Attribute Name="HeadCloseToTail">1</Attribute>
