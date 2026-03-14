@@ -90,10 +90,13 @@ def main():
             elif title != last_title:
                 print(f"[♪] 새 곡 감지: {title}")
                 try:
-                    send_text_to_led(title)
-                    last_title = title
+                    success = send_text_to_led(title)
+                    if success:
+                        last_title = title
+                    else:
+                        print("[!] 전송 실패 — 다음 주기에 재시도합니다")
                 except Exception as e:
-                    print(f"[!] 전송 실패: {e}")
+                    print(f"[!] 전송 오류: {e} — 다음 주기에 재시도합니다")
 
             time.sleep(CHECK_INTERVAL)
 
