@@ -25,13 +25,8 @@ SCREEN_HEIGHT = 16
 DEVICE_ID = "D16-23-A454A"
 
 
-def render_text_to_png(text, width=SCREEN_WIDTH, height=SCREEN_HEIGHT, font_size=14):
-    """텍스트를 160x16 PNG 이미지로 렌더링합니다."""
-    img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
-    draw = ImageDraw.Draw(img)
-
-    # 시스템 폰트 시도
-    font = None
+def _load_font(font_size=14):
+    """시스템 폰트를 로드합니다."""
     font_paths = [
         "C:/Windows/Fonts/malgun.ttf",      # 맑은 고딕 (Windows)
         "C:/Windows/Fonts/gulim.ttc",        # 굴림
@@ -41,22 +36,86 @@ def render_text_to_png(text, width=SCREEN_WIDTH, height=SCREEN_HEIGHT, font_size
     ]
     for fp in font_paths:
         try:
-            font = ImageFont.truetype(fp, font_size)
-            break
+            return ImageFont.truetype(fp, font_size)
         except (OSError, IOError):
             continue
+    return ImageFont.load_default()
 
-    if font is None:
-        font = ImageFont.load_default()
 
-    # 텍스트 중앙 정렬
+def _is_emoji(ch):
+    """이모지 문자인지 판별합니다."""
+    cp = ord(ch)
+    return (
+        0x1F600 <= cp <= 0x1F64F or   # 이모티콘
+        0x1F300 <= cp <= 0x1F5FF or   # 기호 및 픽토그램
+        0x1F680 <= cp <= 0x1F6FF or   # 교통 및 지도
+        0x1F900 <= cp <= 0x1F9FF or   # 보충 이모지
+        0x1FA00 <= cp <= 0x1FA6F or   # 체스 기호
+        0x1FA70 <= cp <= 0x1FAFF or   # 기호 확장
+        0x2600 <= cp <= 0x26FF or     # 기타 기호
+        0x2700 <= cp <= 0x27BF or     # 딩뱃
+        0xFE00 <= cp <= 0xFE0F or     # 변형 선택자
+        0x200D == cp                   # ZWJ
+    )
+
+
+def _is_korean(ch):
+    """한글 문자인지 판별합니다."""
+    cp = ord(ch)
+    return (
+        0xAC00 <= cp <= 0xD7AF or   # 한글 음절
+        0x3130 <= cp <= 0x318F or   # 한글 호환 자모
+        0x1100 <= cp <= 0x11FF      # 한글 자모
+    )
+
+
+def calc_text_display_width(text):
+    """텍스트의 표시 너비를 고정 글자 크기로 계산합니다.
+    한글=7px, 영문=7px, 이모지=9px."""
+    width = 0
+    for ch in text:
+        if _is_emoji(ch):
+            width += 9
+        elif _is_korean(ch):
+            width += 7
+        else:
+            width += 7
+    return width
+
+
+def measure_text_width(text, font_size=14):
+    """텍스트의 렌더링 너비(픽셀)를 측정합니다."""
+    font = _load_font(font_size)
+    tmp = Image.new("RGBA", (1, 1))
+    draw = ImageDraw.Draw(tmp)
     bbox = draw.textbbox((0, 0), text, font=font)
+    return bbox[2] - bbox[0]
+
+
+def render_text_to_png(text, width=SCREEN_WIDTH, height=SCREEN_HEIGHT, font_size=14):
+    """텍스트를 PNG 이미지로 렌더링합니다.
+    width가 None이면 텍스트 전체 너비에 맞춰 자동 결정."""
+    font = _load_font(font_size)
+
+    # 텍스트 크기 측정
+    tmp = Image.new("RGBA", (1, 1))
+    tmp_draw = ImageDraw.Draw(tmp)
+    bbox = tmp_draw.textbbox((0, 0), text, font=font)
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
-    x = max(0, (width - text_w) // 2)
-    y = max(0, (height - text_h) // 2)
 
-    draw.text((x, y), text, fill=(255, 255, 255, 255), font=font)
+    # 자동 너비: 텍스트 전체가 들어가는 크기
+    if width is None:
+        width = text_w + 4  # 약간의 여백
+
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
+    draw = ImageDraw.Draw(img)
+
+    # 텍스트 배치 (bbox 오프셋 보정)
+    x = max(0, (width - text_w) // 2) - bbox[0]
+    y = max(0, (height - text_h) // 2) - bbox[1]
+
+    draw.text((x, y), text, fill=(229, 147, 161, 255), font=font)
 
     # PNG 바이트로 변환
     buf = io.BytesIO()
@@ -96,12 +155,42 @@ def recv_packet(sock, timeout=5):
         return None, None, b""
 
 
+def recv_expected(sock, expected_cmd, timeout=5, max_tries=10):
+    """기대하는 응답 커맨드가 올 때까지 수신합니다.
+    다른 응답(예: 밀린 0x001A)은 건너뜁니다."""
+    for i in range(max_tries):
+        length, cmd, data = recv_packet(sock, timeout)
+        if cmd is None:
+            print(f"[!] 응답 없음 (기대: 0x{expected_cmd:04X})")
+            return None, None, b""
+        if cmd == expected_cmd:
+            return length, cmd, data
+        print(f"[DEBUG] 0x{cmd:04X} 수신 (기대: 0x{expected_cmd:04X}, 건너뜀)")
+    print(f"[!] {max_tries}회 시도 후 기대 응답 0x{expected_cmd:04X} 못 받음")
+    return None, None, b""
+
+
 def send_text_to_led(text):
     """텍스트를 LED 전광판에 전송합니다."""
     print(f"[*] 텍스트: '{text}'")
 
+    # 텍스트 표시 너비 계산 (한글=7, 영문=7, 이모지=9)
+    text_width = calc_text_display_width(text)
+    use_scroll = text_width > SCREEN_WIDTH
+    if use_scroll:
+        disp_effect = 26   # 연속 스크롤 (우→좌)
+        clear_effect = 25
+        # 스크롤: 텍스트 전체 너비로 렌더링
+        png_data = render_text_to_png(text, width=None)
+        print(f"[*] 스크롤 모드 (표시너비 {text_width}px > {SCREEN_WIDTH}px, DispEffect=26)")
+    else:
+        disp_effect = 30   # 왼쪽에서 등장
+        clear_effect = 0
+        # 정적: 화면 너비에 맞춰 렌더링
+        png_data = render_text_to_png(text)
+        print(f"[*] 정적 모드 (표시너비 {text_width}px <= {SCREEN_WIDTH}px, DispEffect=30)")
+
     # 1. PNG 렌더링
-    png_data = render_text_to_png(text)
     png_md5 = hashlib.md5(png_data).hexdigest()
     png_filename = f"{png_md5}.png"
     print(f"[*] PNG 렌더링 완료: {len(png_data)}B, MD5: {png_md5}")
@@ -179,14 +268,14 @@ def send_text_to_led(text):
             <Node Level="4" Type="HD_SingleLineText_Plugin">
                 <Attribute Name="ByCount">1</Attribute>
                 <Attribute Name="ByTime">300</Attribute>
-                <Attribute Name="ClearEffect">0</Attribute>
+                <Attribute Name="ClearEffect">{clear_effect}</Attribute>
                 <Attribute Name="ClearTime">4</Attribute>
                 <Attribute Name="ColorfulTextEnable">0</Attribute>
                 <Attribute Name="ColorfulTextIndex">3</Attribute>
                 <Attribute Name="ColorfulTextSelect">://images/Colorful/static.png</Attribute>
                 <Attribute Name="ColorfulTextSpeed">0</Attribute>
                 <Attribute Name="ContentAlign">132</Attribute>
-                <Attribute Name="DispEffect">30</Attribute>
+                <Attribute Name="DispEffect">{disp_effect}</Attribute>
                 <Attribute Name="DispTime">4</Attribute>
                 <Attribute Name="EditBgColor">0</Attribute>
                 <Attribute Name="HeadCloseToTail">1</Attribute>
@@ -289,46 +378,68 @@ def send_text_to_led(text):
         sock.sendall(make_packet(0x0013))
         recv_packet(sock)
 
-        sock.sendall(make_packet(0x0015, b"\x00\x00\x00\x00"))
+        # 0x0015: 전송 확인 — 01000000 플래그로 기존 콘텐츠 교체
+        sock.sendall(make_packet(0x0015, b"\x00\x00\x00\x00\x01\x00\x00\x00"))
         recv_packet(sock)
 
         # Step 9: PNG 파일 전송
         print(f"[*] PNG 전송 중: {png_filename}...")
-        # 파일명 전송
         sock.sendall(make_packet(0x0017, png_filename.encode("ascii") + b"\x00"))
-        recv_packet(sock)
+        _, cmd, _ = recv_expected(sock, 0x0018)
+        if cmd is None:
+            print("[!] PNG 파일명 응답 실패")
+            return False
 
-        # 파일 데이터 전송
         sock.sendall(make_packet(0x0019, png_data))
-        recv_packet(sock)
+        _, cmd, _ = recv_expected(sock, 0x001A)
+        if cmd is None:
+            print("[!] PNG 데이터 응답 실패")
+            return False
 
-        # 파일 완료
         sock.sendall(make_packet(0x001B))
-        recv_packet(sock)
+        _, cmd, _ = recv_expected(sock, 0x001C)
+        if cmd is None:
+            print("[!] PNG 완료 응답 실패")
+            return False
         print("[+] PNG 전송 완료")
 
         # Step 10: XML(.boo) 파일 전송
         print(f"[*] XML 설정 전송 중: {xml_filename}...")
         sock.sendall(make_packet(0x0017, xml_filename.encode("ascii") + b"\x00"))
-        recv_packet(sock)
+        _, cmd, _ = recv_expected(sock, 0x0018)
+        if cmd is None:
+            print("[!] XML 파일명 응답 실패")
+            return False
 
-        # XML 데이터는 청크로 나눠서 전송 (최대 ~9000B)
-        chunk_size = 9000
-        for offset in range(0, len(xml_config), chunk_size):
-            chunk = xml_config[offset:offset + chunk_size]
-            sock.sendall(make_packet(0x0019, chunk))
-            recv_packet(sock)
+        sock.sendall(make_packet(0x0019, xml_config))
+        _, cmd, _ = recv_expected(sock, 0x001A)
+        if cmd is None:
+            print("[!] XML 데이터 응답 실패")
+            return False
 
         sock.sendall(make_packet(0x001B))
-        recv_packet(sock)
+        _, cmd, _ = recv_expected(sock, 0x001C)
+        if cmd is None:
+            print("[!] XML 완료 응답 실패")
+            return False
         print("[+] XML 설정 전송 완료")
 
         # Step 11: 전송 완료
         sock.sendall(make_packet(0x001D))
-        recv_packet(sock)
+        length, cmd, data = recv_expected(sock, 0x001E)
+        if cmd is None:
+            print("[!] 전송 완료 확인 실패 (0x001E 응답 없음)")
+            return False
+
+        # 최종 확인 — HDPlayer는 0x001F를 2번 보냄
+        sock.sendall(make_packet(0x001F))
+        length, cmd, data = recv_expected(sock, 0x0020)
+        if cmd is None:
+            print("[!] 최종 확인 실패 (0x0020 응답 없음)")
+            return False
 
         sock.sendall(make_packet(0x001F))
-        recv_packet(sock)
+        recv_packet(sock, timeout=2)  # 두 번째는 응답 없을 수 있음
 
         print("[+] 전광판 업데이트 완료!")
         return True
